@@ -1,0 +1,183 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 262 60% 6%;
+    --foreground: 0 0% 98%;
+
+    --card: 262 63% 24%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 262 63% 24%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 270 100% 69%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 285 100% 69%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 262 39% 16%;
+    --muted-foreground: 0 0% 80%;
+
+    --accent: 285 96% 85%;
+    --accent-foreground: 262 63% 24%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 270 100% 69% / 80%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 270 100% 69%;
+
+    --radius: 0;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "pnum" on, "onum" on;
+    image-rendering: pixelated;
+    cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' style='fill:none;stroke:white;stroke-width:2'><circle cx='8' cy='8' r='5'/></svg>") 8 8, auto;
+  }
+  
+  a, button {
+    cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' style='fill:white;stroke:white;stroke-width:2'><circle cx='8' cy='8' r='5'/></svg>") 8 8, pointer;
+  }
+  
+  /* Style scrollbar for pixel art theme */
+  ::-webkit-scrollbar {
+    width: 12px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: #2A1B6A;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: #7B61FF;
+    border: 2px solid #2A1B6A;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: #FF61DC;
+  }
+}
+
+@layer components {
+  .pixel-border {
+    @apply border-2 border-pixel-purple relative;
+    box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.2);
+  }
+
+  .pixel-window {
+    @apply bg-pixel-darkPurple rounded-none border-2 border-pixel-purple p-1 relative overflow-hidden;
+    box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.2);
+    z-index: 1;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .pixel-window:hover {
+    box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.25);
+  }
+
+  .pixel-window-title {
+    @apply bg-pixel-purple px-3 py-1 flex justify-between items-center mb-1;
+  }
+
+  .pixel-window-content {
+    @apply bg-pixel-black p-4 text-white min-h-[200px];
+  }
+
+  .pixel-btn {
+    @apply bg-pixel-pink text-white px-4 py-2 font-pixel text-xs uppercase 
+           hover:bg-pixel-purple transition-colors duration-200 
+           border-2 border-white shadow-[4px_4px_0px_rgba(0,0,0,0.2)];
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .pixel-btn::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(
+      to bottom right,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.1) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    transform: translateX(-100%) translateY(-100%) rotate(45deg);
+    transition: transform 0.5s;
+    pointer-events: none;
+  }
+  
+  .pixel-btn:hover::after {
+    transform: translateX(100%) translateY(100%) rotate(45deg);
+  }
+
+  .pixel-dots {
+    @apply inline-flex gap-1;
+  }
+
+  .pixel-dot {
+    @apply w-2 h-2 rounded-none inline-block;
+    transition: all 0.2s ease;
+  }
+  
+  .pixel-dot:hover {
+    transform: scale(1.2);
+  }
+
+  .pixel-dot-filled {
+    @apply bg-white;
+  }
+  
+  .pixel-dot-filled:hover {
+    @apply bg-pixel-pink;
+  }
+
+  .pixel-dot-empty {
+    @apply bg-gray-600;
+  }
+  
+  .pixel-dot-empty:hover {
+    @apply bg-gray-500;
+  }
+  
+  /* Update this for proper background rendering and content layering */
+  #root {
+    position: relative;
+    z-index: 1;
+  }
+  
+  /* Animation for interactive elements */
+  @keyframes pixel-pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+  }
+  
+  .animate-pixel-float {
+    animation: pixel-float 3s ease-in-out infinite;
+  }
+  
+  @keyframes pixel-float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+    100% { transform: translateY(0px); }
+  }
+}
