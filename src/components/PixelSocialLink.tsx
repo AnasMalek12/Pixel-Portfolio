@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { SocialLink } from '@/config/portfolioConfig';
-import { Mail, Linkedin, Github, Instagram, Twitter } from 'lucide-react';
+import { Mail, Linkedin, Github, Instagram, Twitter, FileUser } from 'lucide-react';
 
 interface PixelSocialLinkProps {
   social: SocialLink;
@@ -20,8 +20,8 @@ const PixelSocialLink: React.FC<PixelSocialLinkProps> = ({ social }) => {
         return <Instagram className="w-4 h-4" />;
       case 'twitter':
         return <Twitter className="w-4 h-4" />;
-      case 'behance':
-        return <div className="text-xs font-bold">Be</div>;
+      case 'Resume':
+        return <FileUser className="w-4 h-4"/>;
       default:
         return <Mail className="w-4 h-4" />;
     }

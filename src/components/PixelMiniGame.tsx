@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
-import { useToast } from "@/components/ui/use-toast";
-import { Button } from "@/components/ui/button";
-import { Square } from "lucide-react";
+import React, { useState, useEffect, useRef, useReducer, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 
+// --- TYPE DEFINITIONS ---
+// Defines the structure for all objects in the game.
 interface GameObject {
   id: number;
   x: number;
@@ -16,612 +15,492 @@ interface GameObject {
   color?: string;
 }
 
-const PixelMiniGame: React.FC = () => {
-  const [gameStarted, setGameStarted] = useState(false);
-  const [gameOver, setGameOver] = useState(false);
-  const [score, setScore] = useState(0);
-  const [level, setLevel] = useState(1);
-  const [lives, setLives] = useState(3);
-  const [powerUpActive, setPowerUpActive] = useState(false);
-  const [highScore, setHighScore] = useState(() => {
-    const saved = localStorage.getItem('pixel-game-highscore');
-    return saved ? parseInt(saved) : 0;
-  });
-  const [player, setPlayer] = useState<GameObject>({
+// Defines the complete state of the game.
+interface GameState {
+  gameStarted: boolean;
+  gameOver: boolean;
+  score: number;
+  level: number;
+  lives: number;
+  powerUpActive: boolean;
+  powerUpEndTime: number | null;
+  highScore: number;
+  player: GameObject;
+  bullets: GameObject[];
+  enemies: GameObject[];
+  stars: GameObject[];
+  powerUps: GameObject[];
+  message: { id: number; text: string } | null;
+  keys: {
+    moveLeft: boolean;
+    moveRight: boolean;
+    shoot: boolean;
+  };
+}
+
+// Defines all possible actions that can change the game state.
+type GameAction =
+  | { type: 'START_GAME' }
+  | { type: 'GAME_OVER' }
+  | { type: 'STOP_GAME' }
+  | { type: 'TICK'; payload: { delta: number } }
+  | { type: 'KEY_DOWN'; payload: { key: string } }
+  | { type: 'KEY_UP'; payload: { key: string } }
+  | { type: 'TAP_SHOOT' }
+  | { type: 'SET_PLAYER_POSITION'; payload: { x: number } }
+  | { type: 'CLEAR_MESSAGE' };
+
+// --- CONSTANTS AND HELPERS ---
+const PLAYER_SPEED = 0.5;
+const BULLET_SPEED = 0.8;
+const ENEMY_BASE_SPEED = 0.05;
+const STAR_SPEED = 0.05;
+const POWERUP_SPEED = 0.1;
+const PLAYER_WIDTH = 6;
+const PLAYER_HEIGHT = 6;
+const GAME_WIDTH = 100;
+
+// Generates a set of stars for the background.
+const initializeStars = (): GameObject[] => {
+  const newStars: GameObject[] = [];
+  for (let i = 0; i < 30; i++) {
+    newStars.push({
+      id: i,
+      x: Math.random() * 100,
+      y: Math.random() * 100,
+      width: Math.random() * 1 + 0.5,
+      height: Math.random() * 1 + 0.5,
+      type: 'star',
+      speed: Math.random() * STAR_SPEED + 0.01,
+      color: Math.random() > 0.7 ? '#61DCFF' : (Math.random() > 0.5 ? '#FF61DC' : '#FFFFFF')
+    });
+  }
+  return newStars;
+};
+
+// --- INITIAL STATE ---
+const getInitialState = (highScore: number): GameState => ({
+  gameStarted: false,
+  gameOver: false,
+  score: 0,
+  level: 1,
+  lives: 3,
+  powerUpActive: false,
+  powerUpEndTime: null,
+  highScore,
+  player: {
     id: 0,
-    x: 47,
+    x: (GAME_WIDTH - PLAYER_WIDTH) / 2,
     y: 85,
-    width: 6,
-    height: 6,
+    width: PLAYER_WIDTH,
+    height: PLAYER_HEIGHT,
     type: 'player'
+  },
+  bullets: [],
+  enemies: [],
+  stars: initializeStars(),
+  powerUps: [],
+  message: null,
+  keys: {
+    moveLeft: false,
+    moveRight: false,
+    shoot: false,
+  },
+});
+
+// --- GAME REDUCER ---
+// This function handles all state updates for the game.
+function gameReducer(state: GameState, action: GameAction): GameState {
+  switch (action.type) {
+    case 'START_GAME':
+      return {
+        ...getInitialState(state.highScore),
+        gameStarted: true,
+        stars: state.stars, // Keep existing stars
+      };
+
+    case 'STOP_GAME': {
+        const newHighScore = Math.max(state.highScore, state.score);
+        if (newHighScore > state.highScore) {
+            localStorage.setItem('pixel-game-highscore', newHighScore.toString());
+        }
+        return {
+            ...getInitialState(newHighScore),
+            stars: state.stars,
+        };
+    }
+
+    case 'GAME_OVER': {
+      const newHighScore = Math.max(state.highScore, state.score);
+      if (newHighScore > state.highScore) {
+        localStorage.setItem('pixel-game-highscore', newHighScore.toString());
+      }
+      return {
+        ...state,
+        gameStarted: false,
+        gameOver: true,
+        highScore: newHighScore,
+      };
+    }
+
+    case 'KEY_DOWN': {
+      const newKeys = { ...state.keys };
+      if (action.payload.key === 'ArrowLeft') newKeys.moveLeft = true;
+      if (action.payload.key === 'ArrowRight') newKeys.moveRight = true;
+      if (action.payload.key === ' ') newKeys.shoot = true;
+      return { ...state, keys: newKeys };
+    }
+
+    case 'KEY_UP': {
+      const newKeys = { ...state.keys };
+      if (action.payload.key === 'ArrowLeft') newKeys.moveLeft = false;
+      if (action.payload.key === 'ArrowRight') newKeys.moveRight = false;
+      if (action.payload.key === ' ') newKeys.shoot = false;
+      return { ...state, keys: newKeys };
+    }
+    
+    case 'SET_PLAYER_POSITION': {
+      const newX = Math.max(0, Math.min(GAME_WIDTH - state.player.width, action.payload.x));
+      return { ...state, player: { ...state.player, x: newX } };
+    }
+
+    case 'TAP_SHOOT': {
+        const bulletCooldown = state.powerUpActive ? 150 : 300;
+        if (Date.now() - (state.player.id || 0) < bulletCooldown) {
+            return state; // Cooldown is active, do nothing
+        }
+        
+        const { player, powerUpActive } = state;
+        const newBullets = [...state.bullets];
+        const newPlayerState = { ...player, id: Date.now() }; // Update last shot timestamp on player
+
+        const shots = powerUpActive
+          ? [
+              { id: Date.now(), x: player.x + player.width / 2 - 0.5, y: player.y - 3, width: 1, height: 3, type: 'bullet' as const, color: '#FFFFFF' },
+              { id: Date.now() + 1, x: player.x + player.width / 2 - 2.5, y: player.y - 2, width: 1, height: 3, type: 'bullet' as const, color: '#ef4444' },
+              { id: Date.now() + 2, x: player.x + player.width / 2 + 1.5, y: player.y - 2, width: 1, height: 3, type: 'bullet' as const, color: '#ef4444' },
+            ]
+          : [{ id: Date.now(), x: player.x + player.width / 2 - 0.5, y: player.y - 3, width: 1, height: 3, type: 'bullet' as const, color: '#FFFFFF' }];
+        
+        newBullets.push(...shots);
+
+        return { ...state, bullets: newBullets, player: newPlayerState };
+    }
+
+    case 'CLEAR_MESSAGE':
+        return { ...state, message: null };
+
+    case 'TICK': {
+      if (!state.gameStarted || state.gameOver) return state;
+
+      const nextState = { ...state };
+
+      // --- MOVEMENT & UPDATES ---
+      if (nextState.keys.moveLeft && nextState.player.x > 0) nextState.player.x = Math.max(0, nextState.player.x - PLAYER_SPEED);
+      if (nextState.keys.moveRight && nextState.player.x < GAME_WIDTH - nextState.player.width) nextState.player.x = Math.min(GAME_WIDTH - nextState.player.width, nextState.player.x + PLAYER_SPEED);
+      
+      nextState.bullets = nextState.bullets.map(b => ({ ...b, y: b.y - BULLET_SPEED })).filter(b => b.y > -5);
+      nextState.enemies = nextState.enemies.map(e => {
+        const newX = e.x + (e.direction || 1) * (e.speed || 0.1);
+        let newDirection = e.direction;
+        if (newX <= 0 || newX >= 95) newDirection = -(newDirection || 1);
+        return { ...e, x: newX, y: e.y + 0.1, direction: newDirection };
+      }).filter(e => e.y < 100);
+      nextState.powerUps = nextState.powerUps.map(p => ({ ...p, y: p.y + (p.speed || POWERUP_SPEED) })).filter(p => p.y < 100);
+      nextState.stars = nextState.stars.map(s => ({ ...s, y: s.y < 100 ? s.y + (s.speed || STAR_SPEED) : -5, x: s.y >= 100 ? Math.random() * 100 : s.x }));
+
+      // --- POWER-UP EXPIRATION ---
+      if (nextState.powerUpActive && nextState.powerUpEndTime && Date.now() > nextState.powerUpEndTime) {
+        nextState.powerUpActive = false;
+        nextState.powerUpEndTime = null;
+      }
+
+      // --- SPAWNING ---
+      const bulletCooldown = nextState.powerUpActive ? 150 : 300;
+      if (nextState.keys.shoot && (Date.now() - (nextState.player.id || 0) > bulletCooldown)) {
+        nextState.player.id = Date.now();
+        const newShots = nextState.powerUpActive
+          ? [
+              { id: Date.now(), x: nextState.player.x + nextState.player.width / 2 - 0.5, y: nextState.player.y - 3, width: 1, height: 3, type: 'bullet' as const, color: '#FFFFFF' },
+              { id: Date.now() + 1, x: nextState.player.x + nextState.player.width / 2 - 2.5, y: nextState.player.y - 2, width: 1, height: 3, type: 'bullet' as const, color: '#ef4444' },
+              { id: Date.now() + 2, x: nextState.player.x + nextState.player.width / 2 + 1.5, y: nextState.player.y - 2, width: 1, height: 3, type: 'bullet' as const, color: '#ef4444' },
+            ]
+          : [{ id: Date.now(), x: nextState.player.x + nextState.player.width / 2 - 0.5, y: nextState.player.y - 3, width: 1, height: 3, type: 'bullet' as const, color: '#FFFFFF' }];
+        nextState.bullets.push(...newShots);
+      }
+      if (nextState.enemies.length < (nextState.level * 2) && Math.random() < 0.02) {
+        nextState.enemies.push({ id: Date.now(), x: Math.random() * 90, y: -5, width: 5, height: 5, type: 'enemy', direction: Math.random() > 0.5 ? 1 : -1, speed: Math.random() * 0.05 + ENEMY_BASE_SPEED + (nextState.level * 0.01) });
+      }
+      if (!nextState.powerUpActive && Math.random() < 0.001) {
+        nextState.powerUps.push({ id: Date.now(), x: Math.random() * 90, y: -5, width: 4, height: 4, type: 'powerUp', speed: POWERUP_SPEED, color: '#61FF8D' });
+      }
+
+      // --- COLLISIONS ---
+      for (let i = nextState.bullets.length - 1; i >= 0; i--) {
+        for (let j = nextState.enemies.length - 1; j >= 0; j--) {
+          const b = nextState.bullets[i];
+          const e = nextState.enemies[j];
+          if (b.x < e.x + e.width && b.x + b.width > e.x && b.y < e.y + e.height && b.y + b.height > e.y) {
+            nextState.bullets.splice(i, 1);
+            nextState.enemies.splice(j, 1);
+            nextState.score += 10;
+            break;
+          }
+        }
+      }
+      for (let i = nextState.enemies.length - 1; i >= 0; i--) {
+        const e = nextState.enemies[i];
+        if (nextState.player.x < e.x + e.width && nextState.player.x + nextState.player.width > e.x && nextState.player.y < e.y + e.height && nextState.player.y + nextState.player.height > e.y) {
+          nextState.enemies.splice(i, 1);
+          nextState.lives -= 1;
+          nextState.message = { id: Date.now(), text: `Hit! Lives: ${nextState.lives}`};
+          if (nextState.lives <= 0) return gameReducer(state, { type: 'GAME_OVER' });
+        }
+      }
+      for (let i = nextState.powerUps.length - 1; i >= 0; i--) {
+        const p = nextState.powerUps[i];
+        if (nextState.player.x < p.x + p.width && nextState.player.x + nextState.player.width > p.x && nextState.player.y < p.y + p.height && nextState.player.y + nextState.player.height > p.y) {
+          nextState.powerUps.splice(i, 1);
+          if (!state.powerUpActive) {
+            nextState.message = { id: Date.now(), text: "Power-Up! Triple shot!"};
+          }
+          nextState.powerUpActive = true;
+          nextState.powerUpEndTime = Date.now() + 10000;
+        }
+      }
+      if (nextState.score >= state.level * 100 && nextState.level < 10) {
+        nextState.level = state.level + 1;
+        nextState.message = { id: Date.now(), text: `Level Up: ${nextState.level}!`};
+      }
+
+      return nextState;
+    }
+    default:
+      return state;
+  }
+}
+
+
+// --- THE COMPONENT ---
+const PixelMiniGame: React.FC = () => {
+  const [highScore, setHighScore] = useState(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('pixel-game-highscore') : '0';
+    return saved ? parseInt(saved, 10) : 0;
   });
-  const [bullets, setBullets] = useState<GameObject[]>([]);
-  const [enemies, setEnemies] = useState<GameObject[]>([]);
-  const [stars, setStars] = useState<GameObject[]>([]);
-  const [powerUps, setPowerUps] = useState<GameObject[]>([]);
-  const gameContainerRef = useRef<HTMLDivElement>(null);
+
+  const [state, dispatch] = useReducer(gameReducer, getInitialState(highScore));
   const requestRef = useRef<number>();
   const lastTimeRef = useRef<number>(0);
-  const enemySpawnTimeRef = useRef<number>(0);
-  const powerUpSpawnTimeRef = useRef<number>(0);
-  const bulletTimeRef = useRef<number>(0);
-  const moveLeftRef = useRef<boolean>(false);
-  const moveRightRef = useRef<boolean>(false);
-  const shootingRef = useRef<boolean>(false);
-  const { toast } = useToast();
+  const gameContainerRef = useRef<HTMLDivElement>(null);
+  const touchStartScreenXRef = useRef<number>(0);
+  const touchStartTimeRef = useRef<number>(0);
+  const isDraggingRef = useRef(false);
 
-  // Add a new function to stop the game
-  const stopGame = () => {
-    if (gameStarted && !gameOver) {
-      // Save high score if current score is higher
-      if (score > highScore) {
-        setHighScore(score);
-        localStorage.setItem('pixel-game-highscore', score.toString());
-      }
-      
-      setGameStarted(false);
-      setGameOver(false);
-      setBullets([]);
-      setEnemies([]);
-      setPowerUps([]);
-      toast({
-        title: "Game Stopped",
-        description: `Final score: ${score}`,
-        duration: 2000,
-      });
-    }
-  };
-
-  // Initialize stars
-  useEffect(() => {
-    const newStars: GameObject[] = [];
-    for (let i = 0; i < 30; i++) {
-      newStars.push({
-        id: i,
-        x: Math.random() * 100,
-        y: Math.random() * 100,
-        width: Math.random() * 1 + 0.5,
-        height: Math.random() * 1 + 0.5,
-        type: 'star',
-        speed: Math.random() * 0.05 + 0.01,
-        color: Math.random() > 0.7 ? '#61DCFF' : (Math.random() > 0.5 ? '#FF61DC' : '#FFFFFF')
-      });
-    }
-    setStars(newStars);
-  }, []);
-
-  // Initialize game
-  const startGame = () => {
-    setGameStarted(true);
-    setGameOver(false);
-    setScore(0);
-    setLevel(1);
-    setLives(3);
-    setPowerUpActive(false);
-    setPlayer({
-      id: 0,
-      x: 47,
-      y: 85,
-      width: 6,
-      height: 6,
-      type: 'player'
-    });
-    setBullets([]);
-    setEnemies([]);
-    setPowerUps([]);
-    
-    // Force initial enemy spawn
-    spawnEnemy();
-  };
-  
-  // New helper function to spawn enemies
-  const spawnEnemy = () => {
-    const newEnemy = {
-      id: Date.now(),
-      x: Math.random() * 90,
-      y: 0,
-      width: 5,
-      height: 5,
-      type: 'enemy' as const,
-      direction: Math.random() > 0.5 ? 1 : -1,
-      speed: Math.random() * 0.1 + 0.05 + (level * 0.01)
-    };
-    setEnemies(prev => [...prev, newEnemy]);
-  };
-
-  // Game loop
-  const gameLoop = (time: number) => {
-    if (lastTimeRef.current === 0) {
-      lastTimeRef.current = time;
-      enemySpawnTimeRef.current = time;
-      powerUpSpawnTimeRef.current = time;
-      requestRef.current = requestAnimationFrame(gameLoop);
-      return;
-    }
-
+  const gameLoop = useCallback((time: number) => {
+    if (lastTimeRef.current === 0) lastTimeRef.current = time;
     const delta = time - lastTimeRef.current;
     lastTimeRef.current = time;
-
-    if (gameStarted && !gameOver) {
-      // Move player
-      if (moveLeftRef.current && player.x > 0) {
-        setPlayer(prev => ({ ...prev, x: Math.max(0, prev.x - 0.5) }));
-      }
-      if (moveRightRef.current && player.x < 94) {
-        setPlayer(prev => ({ ...prev, x: Math.min(94, prev.x + 0.5) }));
-      }
-
-      // Shoot bullets
-      if (shootingRef.current && time - bulletTimeRef.current > (powerUpActive ? 150 : 300)) {
-        bulletTimeRef.current = time;
-        if (powerUpActive) {
-          // Triple shot with power-up
-          const newBullets = [
-            {
-              id: Date.now(),
-              x: player.x + player.width / 2 - 0.5,
-              y: player.y - 3,
-              width: 1,
-              height: 3,
-              type: 'bullet' as const,
-              color: '#61DCFF'
-            },
-            {
-              id: Date.now() + 1,
-              x: player.x + player.width / 2 - 2.5,
-              y: player.y - 2,
-              width: 1,
-              height: 3,
-              type: 'bullet' as const,
-              color: '#FF61DC'
-            },
-            {
-              id: Date.now() + 2,
-              x: player.x + player.width / 2 + 1.5,
-              y: player.y - 2,
-              width: 1,
-              height: 3,
-              type: 'bullet' as const,
-              color: '#FF61DC'
-            }
-          ];
-          setBullets(prev => [...prev, ...newBullets]);
-        } else {
-          // Regular shot
-          const newBullet = {
-            id: Date.now(),
-            x: player.x + player.width / 2 - 0.5,
-            y: player.y - 3,
-            width: 1,
-            height: 3,
-            type: 'bullet' as const,
-            color: '#FFFFFF'
-          };
-          setBullets(prev => [...prev, newBullet]);
-        }
-      }
-
-      // Spawn enemies - Fixed to ensure enemies are generated
-      const spawnRate = Math.max(1000 - level * 50, 400); // Spawn faster as level increases
-      if (time - enemySpawnTimeRef.current > spawnRate) {
-        enemySpawnTimeRef.current = time;
-        spawnEnemy(); // Always spawn an enemy when the timer is up
-      }
-
-      // Spawn power-ups
-      if (time - powerUpSpawnTimeRef.current > 10000) { // Every 10 seconds
-        powerUpSpawnTimeRef.current = time;
-        if (Math.random() > 0.5 && !powerUpActive) {
-          const newPowerUp = {
-            id: Date.now(),
-            x: Math.random() * 90,
-            y: 0,
-            width: 4,
-            height: 4,
-            type: 'powerUp' as const,
-            speed: 0.1,
-            color: '#61FF8D'
-          };
-          setPowerUps(prev => [...prev, newPowerUp]);
-        }
-      }
-
-      // Move bullets
-      setBullets(prev => 
-        prev
-          .map(bullet => ({
-            ...bullet,
-            y: bullet.y - 0.8
-          }))
-          .filter(bullet => bullet.y > -5)
-      );
-
-      // Move enemies
-      setEnemies(prev => 
-        prev
-          .map(enemy => {
-            let newX = enemy.x + (enemy.direction || 1) * (enemy.speed || 0.1);
-            let newDirection = enemy.direction;
-            
-            if (newX <= 0 || newX >= 95) {
-              newDirection = -newDirection;
-              newX = Math.max(0, Math.min(95, newX));
-            }
-            
-            return {
-              ...enemy,
-              x: newX,
-              y: enemy.y + 0.1,
-              direction: newDirection
-            };
-          })
-          .filter(enemy => enemy.y < 100)
-      );
-
-      // Move power-ups
-      setPowerUps(prev => 
-        prev
-          .map(powerUp => ({
-            ...powerUp,
-            y: powerUp.y + (powerUp.speed || 0.1)
-          }))
-          .filter(powerUp => powerUp.y < 100)
-      );
-
-      // Move stars (background effect)
-      setStars(prev => 
-        prev.map(star => ({
-          ...star,
-          y: star.y < 100 ? star.y + (star.speed || 0.05) : 0
-        }))
-      );
-
-      // Check collisions
-      checkCollisions();
-    }
-
+    dispatch({ type: 'TICK', payload: { delta } });
     requestRef.current = requestAnimationFrame(gameLoop);
-  };
+  }, []);
 
-  // Power-up timer
   useEffect(() => {
-    let powerupTimer: NodeJS.Timeout;
-    if (powerUpActive) {
-      powerupTimer = setTimeout(() => {
-        setPowerUpActive(false);
-      }, 10000); // Power-up lasts 10 seconds
+    if (state.gameStarted && !state.gameOver) {
+      requestRef.current = requestAnimationFrame(gameLoop);
     }
     return () => {
-      if (powerupTimer) clearTimeout(powerupTimer);
+      if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
-  }, [powerUpActive]);
+  }, [state.gameStarted, state.gameOver, gameLoop]);
 
-  // Level up when score reaches threshold
-  useEffect(() => {
-    const nextLevelScore = level * 100;
-    if (score >= nextLevelScore && level < 10) {
-      setLevel(prevLevel => prevLevel + 1);
-      toast({
-        title: `Level Up: ${level + 1}!`,
-        description: "Enemies are getting faster!",
-        duration: 2000,
-      });
-    }
-  }, [score, level, toast]);
-
-  // Collision detection
-  const checkCollisions = () => {
-    const updatedEnemies = [...enemies];
-    const updatedBullets = [...bullets];
-    const updatedPowerUps = [...powerUps];
-    let updatedScore = score;
-    let updatedLives = lives;
-    let playerPoweredUp = powerUpActive;
-
-    // Check bullet-enemy collisions
-    for (let i = updatedBullets.length - 1; i >= 0; i--) {
-      const bullet = updatedBullets[i];
-      for (let j = updatedEnemies.length - 1; j >= 0; j--) {
-        const enemy = updatedEnemies[j];
-        if (
-          bullet.x < enemy.x + enemy.width &&
-          bullet.x + bullet.width > enemy.x &&
-          bullet.y < enemy.y + enemy.height &&
-          bullet.y + bullet.height > enemy.y
-        ) {
-          updatedBullets.splice(i, 1);
-          updatedEnemies.splice(j, 1);
-          updatedScore += 10;
-          break;
-        }
-      }
-    }
-
-    // Check player-powerUp collisions
-    for (let i = updatedPowerUps.length - 1; i >= 0; i--) {
-      const powerUp = updatedPowerUps[i];
-      if (
-        player.x < powerUp.x + powerUp.width &&
-        player.x + player.width > powerUp.x &&
-        player.y < powerUp.y + powerUp.height &&
-        player.y + player.height > powerUp.y
-      ) {
-        updatedPowerUps.splice(i, 1);
-        playerPoweredUp = true;
-        toast({
-          title: "Power-Up!",
-          description: "Triple shot activated!",
-          duration: 2000,
-        });
-      }
-    }
-
-    // Check player-enemy collisions
-    for (let i = updatedEnemies.length - 1; i >= 0; i--) {
-      const enemy = updatedEnemies[i];
-      if (
-        player.x < enemy.x + enemy.width &&
-        player.x + player.width > enemy.x &&
-        player.y < enemy.y + enemy.height &&
-        player.y + player.height > enemy.y
-      ) {
-        updatedEnemies.splice(i, 1);
-        updatedLives -= 1;
-        if (updatedLives <= 0) {
-          gameEnd(updatedScore);
-          return;
-        } else {
-          toast({
-            title: `Hit! Lives: ${updatedLives}`,
-            description: "Be careful!",
-            duration: 1500,
-          });
-        }
-      }
-    }
-
-    // Update game state
-    setBullets(updatedBullets);
-    setEnemies(updatedEnemies);
-    setPowerUps(updatedPowerUps);
-    setScore(updatedScore);
-    setLives(updatedLives);
-    setPowerUpActive(playerPoweredUp);
-  };
-
-  // End game
-  const gameEnd = (finalScore: number) => {
-    setGameOver(true);
-    const newHighScore = Math.max(highScore, finalScore);
-    
-    if (newHighScore > highScore) {
-      setHighScore(newHighScore);
-      localStorage.setItem('pixel-game-highscore', newHighScore.toString());
-      toast({
-        title: "New High Score!",
-        description: `Congratulations! Your new high score is ${newHighScore}!`,
-        duration: 3000,
-      });
-    }
-  };
-
-  // Keyboard controls - Modified to prevent default behavior of space key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'ArrowLeft') moveLeftRef.current = true;
-      if (e.code === 'ArrowRight') moveRightRef.current = true;
-      if (e.code === 'Space') {
-        e.preventDefault(); // Prevent space from scrolling the page
-        shootingRef.current = true;
+      if (['ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+        e.preventDefault();
+        dispatch({ type: 'KEY_DOWN', payload: { key: e.key } });
       }
     };
-
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code === 'ArrowLeft') moveLeftRef.current = false;
-      if (e.code === 'ArrowRight') moveRightRef.current = false;
-      if (e.code === 'Space') {
-        e.preventDefault(); // Prevent space from scrolling the page
-        shootingRef.current = false;
+      if (['ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+        e.preventDefault();
+        dispatch({ type: 'KEY_UP', payload: { key: e.key } });
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
-
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
   }, []);
 
-  // Touch controls
   useEffect(() => {
+    const container = gameContainerRef.current;
+    if (!container || !state.gameStarted || state.gameOver) return;
+
     const handleTouchStart = (e: TouchEvent) => {
       e.preventDefault();
-      if (!gameContainerRef.current) return;
-      
-      const rect = gameContainerRef.current.getBoundingClientRect();
       const touch = e.touches[0];
-      const x = ((touch.clientX - rect.left) / rect.width) * 100;
-      
-      if (x < 33) {
-        moveLeftRef.current = true;
-        moveRightRef.current = false;
-      } else if (x > 66) {
-        moveLeftRef.current = false;
-        moveRightRef.current = true;
-      } else {
-        shootingRef.current = true;
+      touchStartScreenXRef.current = touch.clientX;
+      touchStartTimeRef.current = Date.now();
+      isDraggingRef.current = false;
+    };
+    const handleTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+      const touch = e.touches[0];
+      const diffX = Math.abs(touch.clientX - touchStartScreenXRef.current);
+      if (diffX > 10) isDraggingRef.current = true;
+      if (isDraggingRef.current) {
+        const rect = container.getBoundingClientRect();
+        const touchXPercent = ((touch.clientX - rect.left) / rect.width) * 100;
+        const playerX = touchXPercent - (PLAYER_WIDTH / 2);
+        dispatch({ type: 'SET_PLAYER_POSITION', payload: { x: playerX } });
+      }
+    };
+    const handleTouchEnd = (e: TouchEvent) => {
+      e.preventDefault();
+      const touchDuration = Date.now() - touchStartTimeRef.current;
+      if (!isDraggingRef.current && touchDuration < 250) {
+        dispatch({ type: 'TAP_SHOOT' });
       }
     };
 
-    const handleTouchEnd = () => {
-      moveLeftRef.current = false;
-      moveRightRef.current = false;
-      shootingRef.current = false;
-    };
-
-    const container = gameContainerRef.current;
-    if (container) {
-      container.addEventListener('touchstart', handleTouchStart, { passive: false });
-      container.addEventListener('touchend', handleTouchEnd);
-    }
+    container.addEventListener('touchstart', handleTouchStart, { passive: false });
+    container.addEventListener('touchmove', handleTouchMove, { passive: false });
+    container.addEventListener('touchend', handleTouchEnd, { passive: false });
 
     return () => {
-      if (container) {
-        container.removeEventListener('touchstart', handleTouchStart);
-        container.removeEventListener('touchend', handleTouchEnd);
-      }
+      container.removeEventListener('touchstart', handleTouchStart);
+      container.removeEventListener('touchmove', handleTouchMove);
+      container.removeEventListener('touchend', handleTouchEnd);
     };
-  }, []);
+  }, [gameContainerRef, state.gameStarted, state.gameOver]);
 
-  // Start and stop game loop
   useEffect(() => {
-    requestRef.current = requestAnimationFrame(gameLoop);
-    return () => {
-      if (requestRef.current) {
-        cancelAnimationFrame(requestRef.current);
-      }
-    };
-  }, [gameStarted, gameOver]);
+    if (state.message) {
+      const timer = setTimeout(() => {
+        dispatch({ type: 'CLEAR_MESSAGE' });
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [state.message]);
 
-  return (
-    <motion.div 
-      ref={gameContainerRef}
-      className="w-full aspect-square border-2 border-pixel-purple relative bg-pixel-black overflow-hidden"
+  const renderGameObject = (obj: GameObject) => (
+    <motion.div
+      key={`${obj.type}-${obj.id}`}
+      className="absolute"
+      style={{
+        left: `${obj.x}%`,
+        top: `${obj.y}%`,
+        width: `${obj.width}${obj.type === 'star' ? 'px' : '%'}`,
+        height: `${obj.height}${obj.type === 'star' ? 'px' : '%'}`,
+        backgroundColor: obj.color || 'white',
+        boxShadow: obj.type === 'powerUp' ? `0 0 8px ${obj.color}` : 'none',
+      }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.5 }}
-    >
-      {/* Stars background */}
-      {stars.map(star => (
-        <motion.div
-          key={`star-${star.id}`}
-          className="absolute rounded-none"
-          style={{
-            left: `${star.x}%`,
-            top: `${star.y}%`,
-            width: `${star.width}px`,
-            height: `${star.height}px`,
-            backgroundColor: star.color || 'white'
-          }}
-        />
-      ))}
+      exit={{ opacity: 0 }}
+    />
+  );
 
-      {/* Player */}
-      {gameStarted && !gameOver && (
-        <motion.div
-          className={`absolute ${powerUpActive ? 'bg-pixel-cyan animate-pulse' : 'bg-pixel-cyan'}`}
-          style={{
-            left: `${player.x}%`,
-            top: `${player.y}%`,
-            width: `${player.width}%`,
-            height: `${player.height}%`,
-          }}
-        />
-      )}
+  const handleButtonTap = (e: React.TouchEvent, action: GameAction) => {
+    e.stopPropagation();
+    dispatch(action);
+  };
 
-      {/* Bullets */}
-      {bullets.map(bullet => (
-        <motion.div
-          key={`bullet-${bullet.id}`}
-          className="absolute"
-          style={{
-            left: `${bullet.x}%`,
-            top: `${bullet.y}%`,
-            width: `${bullet.width}%`,
-            height: `${bullet.height}%`,
-            backgroundColor: bullet.color || 'white'
-          }}
-        />
-      ))}
+  const playerVariants = {
+    default: {
+      backgroundColor: '#61DCFF',
+      borderRadius: '0%',
+      boxShadow: 'none',
+    },
+    poweredUp: {
+      backgroundColor: '#ef4444', // red-500
+      borderRadius: '50%',
+      boxShadow: '0 0 12px #ef4444',
+    }
+  };
 
-      {/* Enemies */}
-      {enemies.map(enemy => (
-        <motion.div
-          key={`enemy-${enemy.id}`}
-          className="absolute bg-pixel-pink"
-          style={{
-            left: `${enemy.x}%`,
-            top: `${enemy.y}%`,
-            width: `${enemy.width}%`,
-            height: `${enemy.height}%`,
-          }}
-        />
-      ))}
-
-      {/* Power-ups */}
-      {powerUps.map(powerUp => (
-        <motion.div
-          key={`powerUp-${powerUp.id}`}
-          className="absolute animate-pulse"
-          style={{
-            left: `${powerUp.x}%`,
-            top: `${powerUp.y}%`,
-            width: `${powerUp.width}%`,
-            height: `${powerUp.height}%`,
-            backgroundColor: powerUp.color || '#61FF8D'
-          }}
-        />
-      ))}
-
-      {/* Game UI */}
-      <div className="absolute top-2 left-2 font-pixel text-xs text-white">
-        Score: {score}
-      </div>
-      <div className="absolute top-2 right-2 font-pixel text-xs text-pixel-cyan">
-        High: {highScore}
-      </div>
-      <div className="absolute bottom-2 left-2 font-pixel text-xs">
-        <span className="text-pixel-pink">Lvl: {level}</span>
-      </div>
-      <div className="absolute bottom-2 right-2 font-pixel text-xs">
-        <span className={`${lives > 1 ? 'text-pixel-cyan' : 'text-pixel-pink'}`}>
-          Lives: {Array(lives).fill('♥').join('')}
-        </span>
-      </div>
-
-      {/* Stop Button - Added to top-center of the game */}
-      {gameStarted && !gameOver && (
-        <Button 
-          variant="destructive" 
-          size="sm"
-          className="absolute top-2 left-1/2 transform -translate-x-1/2 flex items-center gap-1 py-1 px-2 h-6"
-          onClick={stopGame}
-        >
-          <Square size={12} />
-          <span className="text-xs">Stop</span>
-        </Button>
-      )}
-
-      {/* Game start/over screen */}
-      {(!gameStarted || gameOver) && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-80">
-          <h2 className="font-pixel text-sm text-pixel-cyan mb-2">
-            {gameOver ? 'GAME OVER' : 'PIXEL INVADERS'}
-          </h2>
-          {gameOver && (
-            <p className="font-pixel text-xs text-white mb-4">
-              Score: {score} | Level: {level}
-            </p>
+  return (
+    <div className="flex flex-col items-center p-4 bg-#121212-900 text-white font-mono">
+      <style>{`
+        .pixel-btn { background-color: #433A59; border: 2px solid #ffff; color: #fff; padding: 10px 20px; text-transform: uppercase; font-family: 'Press Start 2P', monospace; cursor: pointer; box-shadow: 4px 4px 0px #946EB7; transition: all 0.1s ease-in-out; }
+        .pixel-btn:hover { transform: translate(2px, 2px); box-shadow: 2px 2px 0px #946EB7; }
+        .pixel-btn:active { transform: translate(4px, 4px); box-shadow: 0px 0px 0px #946EB7; }
+        .font-pixel { font-family: 'Press Start 2P', monospace; }
+      `}</style>
+      <div 
+        ref={gameContainerRef} 
+        className="w-full max-w-lg aspect-square border-2 border-[#7b61ff] relative bg-black overflow-hidden"
+        style={{ boxShadow: '0 0 12px #946EB7'}}
+      >
+        {state.stars.map(renderGameObject)}
+        {state.gameStarted && !state.gameOver && (
+          <>
+            <motion.div
+              className={`absolute ${state.powerUpActive ? 'animate-pulse' : ''}`}
+              style={{
+                left: `${state.player.x}%`,
+                top: `${state.player.y}%`,
+                width: `${state.player.width}%`,
+                height: `${state.player.height}%`,
+              }}
+              variants={playerVariants}
+              animate={state.powerUpActive ? 'poweredUp' : 'default'}
+              transition={{ duration: 0.3 }}
+            />
+            {state.bullets.map(renderGameObject)}
+            {state.enemies.map(b => renderGameObject({ ...b, color: '#FF61DC' }))}
+            {state.powerUps.map(renderGameObject)}
+          </>
+        )}
+        <div className="absolute top-2 left-2 font-pixel text-xs text-white">Score: {state.score}</div>
+        <div className="absolute top-2 right-2 font-pixel text-xs text-[#61DCFF]">High: {state.highScore}</div>
+        <div className="absolute bottom-2 left-2 font-pixel text-xs text-[#FF61DC]">Lvl: {state.level}</div>
+        <div className="absolute bottom-2 right-2 font-pixel text-xs text-[#61DCFF]">Lives: {Array(state.lives).fill('♥').join('')}</div>
+        <AnimatePresence>
+          {state.message && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+              <motion.div
+                className="font-pixel text-sm text-white-300 bg-black/50 px-3 py-1 rounded-lg"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                {state.message.text}
+              </motion.div>
+            </div>
           )}
-          <motion.button
-            className="pixel-btn font-pixel text-xs"
-            onClick={startGame}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+        </AnimatePresence>
+        {state.gameStarted && !state.gameOver && (
+          <button
+            className="absolute top-2 left-1/2 -translate-x-1/2 bg-red-600 text-white text-xs font-pixel px-2 py-1"
+            onClick={() => dispatch({ type: 'STOP_GAME' })}
+            onTouchStart={(e) => handleButtonTap(e, { type: 'STOP_GAME' })}
           >
-            {gameOver ? 'RETRY' : 'START'}
-          </motion.button>
-          <p className="mt-4 font-mono text-xs text-white opacity-70">
-            Controls: ← → and SPACE
-          </p>
-          <p className="mt-2 font-mono text-xs text-pixel-pink opacity-70">
-            Mobile: Tap left/right/center
-          </p>
-        </div>
-      )}
-    </motion.div>
+            Stop
+          </button>
+        )}
+        {(!state.gameStarted || state.gameOver) && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+            <h2 className="font-pixel text-2xl text-center text-[#61DCFF] mb-4" style={{ textShadow: '2px 2px #FF61DC' }}>
+              {state.gameOver ? 'GAME OVER' : 'PIXEL INVADERS'}
+            </h2>
+            {state.gameOver && <p className="font-pixel text-sm text-white text-center mb-4">Final Score: {state.score}</p>}
+            <button
+              className="pixel-btn"
+              onClick={() => dispatch({ type: 'START_GAME' })}
+              onTouchStart={(e) => handleButtonTap(e, { type: 'START_GAME' })}
+            >
+              {state.gameOver ? 'RETRY' : 'START GAME'}
+            </button>
+            <p className="mt-6 font-mono text-xs text-white/70 text-center">Keyboard: ← → & SPACE</p>
+            <p className="mt-2 font-mono text-xs text-white/70 text-center">Mobile: Drag to Move, Tap to Shoot</p>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 

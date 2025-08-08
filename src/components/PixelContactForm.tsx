@@ -42,10 +42,10 @@ const PixelContactForm: React.FC = () => {
     try {
       // Replace with your own EmailJS service ID, template ID, and public key
       const result = await emailjs.sendForm(
-        'Service ID', // Replace with your EmailJS Service ID
-        'Template ID', // Replace with your EmailJS Template ID 
+        'gmail_service', // Replace with your EmailJS Service ID
+        'template_shalfmi', // Replace with your EmailJS Template ID 
         formRef.current,
-        'Public Key' // Replace with your EmailJS Public Key
+        'pskSZb9RCxjsfHwzo' // Replace with your EmailJS Public Key
       );
       
       console.log('Email sent successfully:', result.text);

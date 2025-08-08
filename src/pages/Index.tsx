@@ -47,7 +47,7 @@ const Index = () => {
 
   return (
     <motion.div 
-      className="min-h-screen py-8 px-4 md:px-8"
+      className="min-h-screen bg-pixel-dark text-pixel-light py-8 px-4 md:px-8"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.8 }}
@@ -157,13 +157,35 @@ const Index = () => {
                       Contact
                     </Link>
                   </motion.div>
+
+                  {/* Resume Download Section - UPDATED STYLES */}
+                  <motion.div
+                    className="mt-6 text-center"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 1.2 }}
+                  >
+                    {portfolioConfig.resumeUrl && (
+                      <motion.a
+                        href={portfolioConfig.resumeUrl}
+                        className="pixel-btn inline-block bg-pixel-green"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        Download CV
+                      </motion.a>
+                    )}
+                  </motion.div>
                   
                   {/* Mini-Game Section */}
                   <motion.div 
                     className="mt-6"
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: 1.3 }}
+                    transition={{ delay: 1.4 }} // Adjusted delay
                   >
                     <motion.h2 
                       className="font-pixel text-sm text-white mb-4 text-center flex items-center justify-center gap-2"
@@ -179,8 +201,8 @@ const Index = () => {
                     <div className="mt-4 p-2 border border-dashed border-pixel-purple/50 bg-black/30">
                       <h3 className="font-pixel text-xs text-pixel-pink mb-1">HOW TO PLAY:</h3>
                       <ul className="font-mono text-xs list-disc list-inside space-y-1 text-white/70">
-                        <li>Arrow keys to move</li>
-                        <li>Space to shoot</li>
+                        <li>Arrow keys / Drag to move</li>
+                        <li>Space / Tap to shoot</li>
                         <li>Collect green power-ups</li>
                         <li>Avoid pink enemies</li>
                       </ul>
