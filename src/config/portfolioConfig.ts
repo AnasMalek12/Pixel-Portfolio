@@ -130,7 +130,7 @@ const portfolioConfig: PortfolioConfig = {
     {
       platform: "email",
       username: "Connectwithanasmalek@gmail.com",
-      url: "https://mail.google.com/mail/u/0/?fs=1&to=Connectwithanasmalek@gmail.com&tf=cm"
+      url: "mailto:connectwithanasmalek@gmail.com"
     },
     {
       platform: "github",
