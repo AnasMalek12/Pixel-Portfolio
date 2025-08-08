@@ -1,85 +1,82 @@
-### Don't Forget to give a star 
+# 👾 Pixel Portfolio - Anas Malek
 
-## Project info
+Welcome to my **interactive pixel-portfolio** !  
+This project is a retro-themed, dynamic website designed to showcase my skills, projects, and experience in a fun and engaging way.
 
-**URL**: http://madhavendrasingh.netlify.app/
+🔗 **[Live Demo](https://anasmalek12.netlify.app/)**
 
-## How can I edit this code?
+---
 
-There are several ways of editing your application.
+## 📚 Table of Contents
 
-**Use your preferred IDE**
+- [✨ Features](#-features)
+- [💡 My Contributions](#-my-contributions)
+- [🛠️ Tech Stack](#-tech-stack)
+- [🚀 Running the Project Locally](#-running-the-project-locally)
+- [🙏 Acknowledgements](#-acknowledgements)
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+---
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## ✨ Features
 
-Follow these steps:
+- 🎨 **Retro Pixel Art UI** – A unique design inspired by classic 8-bit computer interfaces  
+- 🪟 **Interactive Windows** – Draggable, animated windows for a desktop-like experience  
+- 🎞️ **Smooth Animations** – Powered by Framer Motion for fluid, physics-based effects  
+- 👾 **Playable Mini-Game** – Includes a fun little *"Pixel Invaders"* game  
+- 📱 **Fully Responsive** – Works seamlessly on desktop, tablet, and mobile devices  
+- ⚙️ **Dynamic Content** – All portfolio data is centrally managed for easy updates  
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone https://github.com/MadhavendraSinghShaktawat/Retro-Pixel-Portfolio.git
+---
 
-# Step 2: Navigate to the project directory.
-cd Retro-Pixel-Portfolio
+## 💡 My Contributions
 
-# Step 3: Install the necessary dependencies.
-npm i
+While this project is based on a fork, I’ve made significant enhancements:
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+- 🎨 **UI/UX Improvements** – Upgraded styling and interactivity for buttons and other UI elements  
+- 👾 **Mini-Game Fixes** – Refactored and debugged *Pixel Invaders* to ensure smooth gameplay  
+- 📄 **Downloadable Resume** – Added a quick-download CV button  
+- 🔧 **Code Refinements** – Improved stability, functionality, and overall code performance  
+
+---
+
+## 🛠️ Tech Stack
+
+- ⚛️ **Frontend:** React + TypeScript  
+- 🎨 **Styling:** Tailwind CSS  
+- 🕹️ **Animations:** Framer Motion  
+- ☁️ **Deployment:** Netlify / Vercel  
+
+---
+
+## 🚀 Running the Project Locally
+
+To get a local copy up and running, follow these simple steps:
+
+### ✅ Prerequisites
+
+Make sure you have:
+
+- [Node.js](https://nodejs.org/)
+- [npm](https://www.npmjs.com/)
+
+## 🧩 Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/AnasMalek12/Pixel-Portfolio.git
+
+# Navigate to the project directory
+cd Pixel-Portfolio
+
+# Install dependencies
+npm install
+
+# Start the development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+## 🙏 Acknowledgements
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+This project was originally inspired by [Madhavendra Singh Shaktawat](https://github.com/MadhavendraSinghShaktawat).  
+Huge thanks for the amazing foundation and pixel-art vision!
 
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Follow these steps to deploy this project using the Netlify CLI.
-
-```sh
-# 1. Install Netlify CLI
-npm install -g netlify-cli
-
-# 2. Login to Netlify
-netlify login
-# This will open a browser window to authenticate.
-
-# 3. Build Your Project
-# Make sure your project is ready to deploy (build it first):
-npm run build
-# Replace with yarn build if using Yarn.
-
-# 4. Deploy
-# First-time deployment (to a draft URL):
-netlify deploy
-# When prompted for a folder to deploy, select your build output folder (e.g., dist, build, or out)
-# It will return a draft URL
-
-# Production deployment:
-netlify deploy --prod
-# This deploys to your live production URL.
-```
-#Note
-change the file name in netlify.toml is its not dist, if its build then build
