@@ -20,8 +20,8 @@ const PixelSocialLink: React.FC<PixelSocialLinkProps> = ({ social }) => {
         return <Instagram className="w-4 h-4" />;
       case 'twitter':
         return <Twitter className="w-4 h-4" />;
-      case 'Resume':
-        return <FileUser className="w-4 h-4"/>;
+      case 'behance':
+         return <div className="text-xs font-bold">Be</div>;
       default:
         return <Mail className="w-4 h-4" />;
     }
