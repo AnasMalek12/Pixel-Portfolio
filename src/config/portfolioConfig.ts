@@ -25,7 +25,7 @@ export type Experience = {
 };
 
 export type SocialLink = {
-  platform: 'email' | 'linkedin' | 'github' | 'Resume' | 'instagram' | 'twitter';
+  platform: 'email' | 'linkedin' | 'github' | 'behance' | 'instagram' | 'twitter';
   username: string;
   url: string;
 };
@@ -143,9 +143,9 @@ const portfolioConfig: PortfolioConfig = {
       url: "https://www.linkedin.com/in/anasmalek12/"
     },
     // {
-    //   platform: "Resume",
-    //   username: "~Resume~",
-    //   url: "https://drive.google.com/file/d/1Ii-3VlpzqAGRIWfSYPNXGwa4Iu919UD6/view?usp=drive_link"
+    //   platform: "behance",
+    //   username: "@pixelartist",
+    //   url: "https://behance.net/"
     // }
   ],
   projects: [

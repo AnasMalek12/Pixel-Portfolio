@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useReducer, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useToast } from '@/hooks/use-toast';
 
 // --- TYPE DEFINITIONS ---
 // Defines the structure for all objects in the game.
@@ -295,6 +296,7 @@ const PixelMiniGame: React.FC = () => {
   const touchStartScreenXRef = useRef<number>(0);
   const touchStartTimeRef = useRef<number>(0);
   const isDraggingRef = useRef(false);
+  const { toast } = useToast();
 
   const gameLoop = useCallback((time: number) => {
     if (lastTimeRef.current === 0) lastTimeRef.current = time;
@@ -476,8 +478,22 @@ const PixelMiniGame: React.FC = () => {
         {state.gameStarted && !state.gameOver && (
           <button
             className="absolute top-2 left-1/2 -translate-x-1/2 bg-red-600 text-white text-xs font-pixel px-2 py-1"
-            onClick={() => dispatch({ type: 'STOP_GAME' })}
-            onTouchStart={(e) => handleButtonTap(e, { type: 'STOP_GAME' })}
+            onClick={() => {
+              toast({
+                title: "Game Stopped",
+                description: `Final score: ${state.score}`,
+                duration: 2000,
+              }); 
+              dispatch({ type: 'STOP_GAME' })
+            }}
+            onTouchStart={(e) => {
+              toast({
+                title: "Game Stopped",
+                description: `Final score: ${state.score}`,
+                duration: 2000,
+              });
+              handleButtonTap(e, { type: 'STOP_GAME' })}
+            }
           >
             Stop
           </button>
