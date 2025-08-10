@@ -61,9 +61,9 @@ export interface PortfolioConfig {
 
 const portfolioConfig: PortfolioConfig = {
   name: "Anas Malek ",
-  title: "Fullstact Web Developer & App Developer ",
+  title: "Fullstack Web Developer & App Developer ",
   avatar: "https://res.cloudinary.com/dmvzrbyq1/image/upload/v1749820555/Profile.webp",
-  about: "I am an Master of Science in Information Technology student with experience in full-stack web development using React, Node.js, and MongoDB, as well as mobile app development using Flutter. I enjoy building practical and easy-to-use applications and have a clear understanding of both front-end and back-end development. I am focused on writing clean code and creating reliable solutions.",
+  about: "I am an Master of science in information technology student with experience in full-stack web development using React, Node.js, and MongoDB, as well as mobile app development using Flutter. I enjoy building practical and easy-to-use applications and have a clear understanding of both front-end and back-end development. I am focused on writing clean code and creating reliable solutions.",
   theme: {
     primary: "#7B61FF",
     secondary: "#FF61DC",
@@ -114,8 +114,7 @@ const portfolioConfig: PortfolioConfig = {
     { name: "Version Control (Git & Github)", level: 5 },
     { name: "Docker", level: 3 },
     { name: "Kubernetes", level: 3 },
-    { name: "WebRTC", level: 3 },
-    { name: "TensorFlow", level: 3 }
+    { name: "WebRTC", level: 3 }
     
   ],
   software: [
