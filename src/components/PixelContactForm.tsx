@@ -43,7 +43,7 @@ const PixelContactForm: React.FC = () => {
       // Replace with your own EmailJS service ID, template ID, and public key
       const result = await emailjs.sendForm(
         'gmail_service', // Replace with your EmailJS Service ID
-        'template_shalfmi', // Replace with your EmailJS Template ID 
+        'template_t5bv425', // Replace with your EmailJS Template ID 
         formRef.current,
         'pskSZb9RCxjsfHwzo' // Replace with your EmailJS Public Key
       );
@@ -88,6 +88,11 @@ const PixelContactForm: React.FC = () => {
                     placeholder="Your name" 
                     {...field} 
                     className="font-mono bg-pixel-black border-pixel-purple focus:border-pixel-pink" 
+                    onKeyDown={(e) => {
+                      if (e.key === ' ') {
+                        e.stopPropagation();
+                    }
+                    }}
                   />
                 </FormControl>
                 <FormMessage className="text-pixel-pink" />
@@ -130,6 +135,11 @@ const PixelContactForm: React.FC = () => {
                     placeholder="Type your message here..." 
                     {...field} 
                     className="font-mono bg-pixel-black border-pixel-purple focus:border-pixel-pink min-h-[120px]" 
+                    onKeyDown={(e) => {
+                        if (e.key === ' ') {
+                          e.stopPropagation();
+                    }
+                    }}
                   />
                 </FormControl>
                 <FormMessage className="text-pixel-pink" />

@@ -203,7 +203,7 @@ const Index = () => {
                       <ul className="font-mono text-xs list-disc list-inside space-y-1 text-white/70">
                         <li>Arrow keys / Drag to move</li>
                         <li>Space / Tap to shoot</li>
-                        <li>Collect green power-ups</li>
+                        <li>Collect green & white power-ups</li>
                         <li>Avoid pink enemies</li>
                       </ul>
                       <div className="text-center mt-2">

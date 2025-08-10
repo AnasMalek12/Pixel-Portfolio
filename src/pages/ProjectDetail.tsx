@@ -44,6 +44,17 @@ const ProjectDetail = () => {
   }
 
   return (
+    <>
+    <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+        .pixel-btn { background-color: #433A59; border: 2px solid #ffff; color: #fff; padding: 10px 20px; text-transform: uppercase; font-family: 'Press Start 2P', monospace; cursor: pointer; box-shadow: 4px 4px 0px #946EB7; transition: all 0.1s ease-in-out; }
+        .pixel-btn:hover { transform: translate(2px, 2px); box-shadow: 2px 2px 0px #946EB7; }
+        .pixel-btn:active { transform: translate(4px, 4px); box-shadow: 0px 0px 0px #946EB7; }
+        .pixel-btn-exit { background-color: #b91c1c; box-shadow: 4px 4px 0px #7f1d1d; }
+        .pixel-btn-exit:hover { box-shadow: 2px 2px 0px #7f1d1d; }
+        .pixel-btn-exit:active { box-shadow: 0px 0px 0px #7f1d1d; }
+        .font-pixel { font-family: 'Press Start 2P', monospace; }
+      `}</style>
     <motion.div 
       className="min-h-screen py-8 px-4 md:px-8"
       initial={{ opacity: 0 }}
@@ -160,6 +171,7 @@ const ProjectDetail = () => {
         </PixelWindow>
       </motion.div>
     </motion.div>
+    </>
   );
 };
 

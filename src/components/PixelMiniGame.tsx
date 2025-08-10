@@ -10,7 +10,7 @@ interface GameObject {
   y: number;
   width: number;
   height: number;
-  type: 'player' | 'enemy' | 'bullet' | 'star' | 'powerUp';
+  type: 'player' | 'enemy' | 'bullet' | 'star' | 'powerUp' | 'shieldPowerUp';
   direction?: number;
   speed?: number;
   color?: string;
@@ -20,11 +20,14 @@ interface GameObject {
 interface GameState {
   gameStarted: boolean;
   gameOver: boolean;
+  isPaused: boolean; // Tracks pause state
   score: number;
   level: number;
   lives: number;
   powerUpActive: boolean;
   powerUpEndTime: number | null;
+  shieldActive: boolean; // NEW: Tracks shield state
+  shieldEndTime: number | null; // NEW: Tracks shield duration
   highScore: number;
   player: GameObject;
   bullets: GameObject[];
@@ -44,6 +47,8 @@ type GameAction =
   | { type: 'START_GAME' }
   | { type: 'GAME_OVER' }
   | { type: 'STOP_GAME' }
+  | { type: 'PAUSE_GAME' }
+  | { type: 'RESUME_GAME' }
   | { type: 'TICK'; payload: { delta: number } }
   | { type: 'KEY_DOWN'; payload: { key: string } }
   | { type: 'KEY_UP'; payload: { key: string } }
@@ -83,11 +88,14 @@ const initializeStars = (): GameObject[] => {
 const getInitialState = (highScore: number): GameState => ({
   gameStarted: false,
   gameOver: false,
+  isPaused: false,
   score: 0,
   level: 1,
   lives: 3,
   powerUpActive: false,
   powerUpEndTime: null,
+  shieldActive: false, // NEW
+  shieldEndTime: null, // NEW
   highScore,
   player: {
     id: 0,
@@ -119,6 +127,10 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         gameStarted: true,
         stars: state.stars, // Keep existing stars
       };
+    case 'PAUSE_GAME':
+      return { ...state, isPaused: true };
+    case 'RESUME_GAME':
+      return { ...state, isPaused: false };
 
     case 'STOP_GAME': {
         const newHighScore = Math.max(state.highScore, state.score);
@@ -149,6 +161,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       if (action.payload.key === 'ArrowLeft') newKeys.moveLeft = true;
       if (action.payload.key === 'ArrowRight') newKeys.moveRight = true;
       if (action.payload.key === ' ') newKeys.shoot = true;
+      if (action.payload.key.toLowerCase() === 'p' && state.gameStarted && !state.gameOver) {
+        return gameReducer(state, { type: state.isPaused ? 'RESUME_GAME' : 'PAUSE_GAME' });
+      }
       return { ...state, keys: newKeys };
     }
 
@@ -192,7 +207,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         return { ...state, message: null };
 
     case 'TICK': {
-      if (!state.gameStarted || state.gameOver) return state;
+      if (!state.gameStarted || state.gameOver || state.isPaused) return state;
 
       const nextState = { ...state };
 
@@ -210,10 +225,15 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       nextState.powerUps = nextState.powerUps.map(p => ({ ...p, y: p.y + (p.speed || POWERUP_SPEED) })).filter(p => p.y < 100);
       nextState.stars = nextState.stars.map(s => ({ ...s, y: s.y < 100 ? s.y + (s.speed || STAR_SPEED) : -5, x: s.y >= 100 ? Math.random() * 100 : s.x }));
 
-      // --- POWER-UP EXPIRATION ---
+      // --- POWER-UP & SHIELD EXPIRATION ---
       if (nextState.powerUpActive && nextState.powerUpEndTime && Date.now() > nextState.powerUpEndTime) {
         nextState.powerUpActive = false;
         nextState.powerUpEndTime = null;
+      }
+      if (nextState.shieldActive && nextState.shieldEndTime && Date.now() > nextState.shieldEndTime) {
+        nextState.shieldActive = false;
+        nextState.shieldEndTime = null;
+        nextState.message = { id: Date.now(), text: "Shield Deactivated!" };
       }
 
       // --- SPAWNING ---
@@ -235,6 +255,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       if (!nextState.powerUpActive && Math.random() < 0.001) {
         nextState.powerUps.push({ id: Date.now(), x: Math.random() * 90, y: -5, width: 4, height: 4, type: 'powerUp', speed: POWERUP_SPEED, color: '#61FF8D' });
       }
+      if (Math.random() < 0.002 && !nextState.shieldActive) {
+        nextState.powerUps.push({ id: Date.now() + 1, x: Math.random() * 90, y: -5, width: 4, height: 4, type: 'shieldPowerUp', speed: POWERUP_SPEED, color: '#FFFFFF' });
+      }
 
       // --- COLLISIONS ---
       for (let i = nextState.bullets.length - 1; i >= 0; i--) {
@@ -252,21 +275,34 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       for (let i = nextState.enemies.length - 1; i >= 0; i--) {
         const e = nextState.enemies[i];
         if (nextState.player.x < e.x + e.width && nextState.player.x + nextState.player.width > e.x && nextState.player.y < e.y + e.height && nextState.player.y + nextState.player.height > e.y) {
-          nextState.enemies.splice(i, 1);
-          nextState.lives -= 1;
-          nextState.message = { id: Date.now(), text: `Hit! Lives: ${nextState.lives}`};
-          if (nextState.lives <= 0) return gameReducer(state, { type: 'GAME_OVER' });
+          if (nextState.shieldActive) {
+            nextState.enemies.splice(i, 1);
+            nextState.shieldActive = false;
+            nextState.shieldEndTime = null;
+            nextState.message = { id: Date.now(), text: "Shield Blocked Hit!" };
+          } else {
+            nextState.enemies.splice(i, 1);
+            nextState.lives -= 1;
+            nextState.message = { id: Date.now(), text: `Hit! Lives: ${nextState.lives}`};
+            if (nextState.lives <= 0) return gameReducer(state, { type: 'GAME_OVER' });
+          }
         }
       }
       for (let i = nextState.powerUps.length - 1; i >= 0; i--) {
         const p = nextState.powerUps[i];
         if (nextState.player.x < p.x + p.width && nextState.player.x + nextState.player.width > p.x && nextState.player.y < p.y + p.height && nextState.player.y + nextState.player.height > p.y) {
           nextState.powerUps.splice(i, 1);
-          if (!state.powerUpActive) {
-            nextState.message = { id: Date.now(), text: "Power-Up! Triple shot!"};
+          if (p.type === 'shieldPowerUp') {
+            nextState.shieldActive = true;
+            nextState.shieldEndTime = Date.now() + 10000; // 10 seconds
+            nextState.message = { id: Date.now(), text: "Shield Activated!" };
+          } else { // 'powerUp' type
+            if (!state.powerUpActive) {
+              nextState.message = { id: Date.now(), text: "Power-Up! Triple shot!"};
+            }
+            nextState.powerUpActive = true;
+            nextState.powerUpEndTime = Date.now() + 10000;
           }
-          nextState.powerUpActive = true;
-          nextState.powerUpEndTime = Date.now() + 10000;
         }
       }
       if (nextState.score >= state.level * 100 && nextState.level < 10) {
@@ -282,8 +318,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 }
 
 
-// --- THE COMPONENT ---
-const PixelMiniGame: React.FC = () => {
+// --- THE GAME COMPONENT ---
+const App = () => {
   const [highScore, setHighScore] = useState(() => {
     const saved = typeof window !== 'undefined' ? localStorage.getItem('pixel-game-highscore') : '0';
     return saved ? parseInt(saved, 10) : 0;
@@ -307,26 +343,27 @@ const PixelMiniGame: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (state.gameStarted && !state.gameOver) {
+    if (state.gameStarted && !state.gameOver && !state.isPaused) {
+      lastTimeRef.current = performance.now();
       requestRef.current = requestAnimationFrame(gameLoop);
     }
     return () => {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
-  }, [state.gameStarted, state.gameOver, gameLoop]);
+  }, [state.gameStarted, state.gameOver, state.isPaused, gameLoop]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (['ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
-        e.preventDefault();
-        dispatch({ type: 'KEY_DOWN', payload: { key: e.key } });
-      }
+        if (['ArrowLeft', 'ArrowRight', ' ', 'p', 'P'].includes(e.key)) {
+            e.preventDefault();
+            dispatch({ type: 'KEY_DOWN', payload: { key: e.key } });
+        }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (['ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
-        e.preventDefault();
-        dispatch({ type: 'KEY_UP', payload: { key: e.key } });
-      }
+        if (['ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+            e.preventDefault();
+            dispatch({ type: 'KEY_UP', payload: { key: e.key } });
+        }
     };
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
@@ -338,7 +375,7 @@ const PixelMiniGame: React.FC = () => {
 
   useEffect(() => {
     const container = gameContainerRef.current;
-    if (!container || !state.gameStarted || state.gameOver) return;
+    if (!container || !state.gameStarted || state.gameOver || state.isPaused) return;
 
     const handleTouchStart = (e: TouchEvent) => {
       e.preventDefault();
@@ -376,7 +413,7 @@ const PixelMiniGame: React.FC = () => {
       container.removeEventListener('touchmove', handleTouchMove);
       container.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [gameContainerRef, state.gameStarted, state.gameOver]);
+  }, [gameContainerRef, state.gameStarted, state.gameOver, state.isPaused]);
 
   useEffect(() => {
     if (state.message) {
@@ -397,7 +434,7 @@ const PixelMiniGame: React.FC = () => {
         width: `${obj.width}${obj.type === 'star' ? 'px' : '%'}`,
         height: `${obj.height}${obj.type === 'star' ? 'px' : '%'}`,
         backgroundColor: obj.color || 'white',
-        boxShadow: obj.type === 'powerUp' ? `0 0 8px ${obj.color}` : 'none',
+        boxShadow: (obj.type === 'powerUp' || obj.type === 'shieldPowerUp') ? `0 0 8px ${obj.color}` : 'none',
       }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -409,6 +446,15 @@ const PixelMiniGame: React.FC = () => {
     e.stopPropagation();
     dispatch(action);
   };
+  
+  const handleExitGame = () => {
+    toast({
+      title: "Game Stopped",
+      description: `Final score: ${state.score}`,
+      duration: 2000,
+    });
+    dispatch({ type: 'STOP_GAME' });
+  };
 
   const playerVariants = {
     default: {
@@ -417,28 +463,52 @@ const PixelMiniGame: React.FC = () => {
       boxShadow: 'none',
     },
     poweredUp: {
-      backgroundColor: '#ef4444', // red-500
+      backgroundColor: '#ef4444',
       borderRadius: '50%',
       boxShadow: '0 0 12px #ef4444',
     }
   };
 
   return (
-    <div className="flex flex-col items-center p-4 bg-#121212-900 text-white font-mono">
+    <div className="flex flex-col items-center justify-center text-white font-mono p-4">
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
         .pixel-btn { background-color: #433A59; border: 2px solid #ffff; color: #fff; padding: 10px 20px; text-transform: uppercase; font-family: 'Press Start 2P', monospace; cursor: pointer; box-shadow: 4px 4px 0px #946EB7; transition: all 0.1s ease-in-out; }
         .pixel-btn:hover { transform: translate(2px, 2px); box-shadow: 2px 2px 0px #946EB7; }
         .pixel-btn:active { transform: translate(4px, 4px); box-shadow: 0px 0px 0px #946EB7; }
+        .pixel-btn-exit { background-color: #b91c1c; box-shadow: 4px 4px 0px #7f1d1d; }
+        .pixel-btn-exit:hover { box-shadow: 2px 2px 0px #7f1d1d; }
+        .pixel-btn-exit:active { box-shadow: 0px 0px 0px #7f1d1d; }
         .font-pixel { font-family: 'Press Start 2P', monospace; }
       `}</style>
       <div 
         ref={gameContainerRef} 
-        className="w-full max-w-lg aspect-square border-2 border-[#7b61ff] relative bg-black overflow-hidden"
-        style={{ boxShadow: '0 0 12px #946EB7'}}
+        className="w-full max-w-lg aspect-square border-2 border-[#7b61ff] relative bg-black overflow-hidden touch-none"
+        style={{ boxShadow: '0 0 13px #946EB7, inset 0 0 10px #7b61ff'}}
       >
         {state.stars.map(renderGameObject)}
         {state.gameStarted && !state.gameOver && (
           <>
+            {/* Shield Renderer */}
+            {state.shieldActive && (
+              <motion.div
+                className="absolute pointer-events-none"
+                style={{
+                  left: `${state.player.x - 2}%`,
+                  top: `${state.player.y - 2}%`,
+                  width: `${PLAYER_WIDTH + 4}%`,
+                  height: `${PLAYER_HEIGHT + 4}%`,
+                  backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                  border: '2px solid white',
+                  borderRadius: state.powerUpActive ? '50%' : '4px',
+                  boxShadow: '0 0 12px white',
+                }}
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.5 }}
+                transition={{ duration: 0.2 }}
+              />
+            )}
             <motion.div
               className={`absolute ${state.powerUpActive ? 'animate-pulse' : ''}`}
               style={{
@@ -464,7 +534,7 @@ const PixelMiniGame: React.FC = () => {
           {state.message && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
               <motion.div
-                className="font-pixel text-sm text-white-300 bg-black/50 px-3 py-1 rounded-lg"
+                className="font-pixel text-sm text-white bg-black/50 px-3 py-1 rounded-lg"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
@@ -475,29 +545,52 @@ const PixelMiniGame: React.FC = () => {
             </div>
           )}
         </AnimatePresence>
-        {state.gameStarted && !state.gameOver && (
+        {/* -- Pause Button -- */}
+        {state.gameStarted && !state.gameOver && !state.isPaused && (
           <button
-            className="absolute top-2 left-1/2 -translate-x-1/2 bg-red-600 text-white text-xs font-pixel px-2 py-1"
-            onClick={() => {
-              toast({
-                title: "Game Stopped",
-                description: `Final score: ${state.score}`,
-                duration: 2000,
-              }); 
-              dispatch({ type: 'STOP_GAME' })
-            }}
-            onTouchStart={(e) => {
-              toast({
-                title: "Game Stopped",
-                description: `Final score: ${state.score}`,
-                duration: 2000,
-              });
-              handleButtonTap(e, { type: 'STOP_GAME' })}
-            }
+            className="absolute top-2 left-1/2 -translate-x-1/2 w-8 h-8 bg-[#433A59]/70 border-2 border-white/50 rounded-full flex items-center justify-center hover:bg-[#433A59] hover:border-white z-10"
+            onClick={() => dispatch({ type: 'PAUSE_GAME' })}
+            onTouchStart={(e) => handleButtonTap(e, { type: 'PAUSE_GAME' })}
+            aria-label="Pause Game"
           >
-            Stop
+            <svg width="12" height="12" viewBox="0 0 14 14" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                <rect x="3" y="2" width="3" height="10" rx="1"/>
+                <rect x="8" y="2" width="3" height="10" rx="1"/>
+            </svg>
           </button>
         )}
+        {/* -- Pause Menu Overlay -- */}
+        <AnimatePresence>
+          {state.isPaused && (
+            <motion.div 
+              className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm p-4 z-20"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <h2 className="font-pixel text-2xl text-center text-[#61DCFF] mb-8" style={{ textShadow: '2px 2px #FF61DC' }}>
+                PAUSED
+              </h2>
+              <button
+                className="pixel-btn mb-4"
+                onClick={() => dispatch({ type: 'RESUME_GAME' })}
+                onTouchStart={(e) => handleButtonTap(e, { type: 'RESUME_GAME' })}
+              >
+                Resume
+              </button>
+              <button
+                className="pixel-btn pixel-btn-exit"
+                onClick={handleExitGame}
+                onTouchStart={(e) => {
+                  e.stopPropagation();
+                  handleExitGame();
+                }}
+              >
+                Exit
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
         {(!state.gameStarted || state.gameOver) && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm p-4">
             <h2 className="font-pixel text-2xl text-center text-[#61DCFF] mb-4" style={{ textShadow: '2px 2px #FF61DC' }}>
@@ -520,4 +613,4 @@ const PixelMiniGame: React.FC = () => {
   );
 };
 
-export default PixelMiniGame;
+export default App;
